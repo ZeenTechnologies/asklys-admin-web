@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #14121C;
+  --color-body: #3F3B4D;
+  --color-muted: #6E6980;
+  --color-line: #E7E4EE;
+  --color-wash: #F7F5FB;
+  --color-brand: #6B5CE7;
+  --color-brand-mid: #4A3BB5;
+  --color-brand-deep: #1A0A6B;
+  --color-accent: #F5A623;
+}
+
+body {
+  background: var(--color-wash);
+  color: var(--color-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* BlockNote editor should sit flush in our card */
+.bn-container { background: transparent; }
+.bn-editor { padding-inline: 0 !important; }
