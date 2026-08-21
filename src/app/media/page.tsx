@@ -1,14 +1,13 @@
-import { requireAuth } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/features/auth/services/session";
+import { listMedia } from "@/features/media/queries";
 import { Shell, PageHead } from "@/components/Shell";
-import { MediaLibrary } from "@/components/MediaLibrary";
+import { MediaLibrary } from "@/features/media/components/MediaLibrary";
 
 export const dynamic = "force-dynamic";
 
 export default async function MediaPage() {
   await requireAuth();
-  const db = supabaseAdmin();
-  const { data } = await db.from("media").select("*").order("created_at", { ascending: false }).limit(200);
+  const data = await listMedia(200);
 
   return (
     <Shell>

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { isLoggedIn } from "@/lib/auth";
-import { q, one } from "@/lib/db";
+import { isLoggedIn } from "@/features/auth/services/session";
+import { deleteMediaByPath, findMediaByPath, insertMedia } from "@/features/media/queries";
 import { deleteObject, objectKey, publicUrl, putObject } from "@/lib/storage";
 
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -47,10 +47,7 @@ export async function POST(req: Request) {
   const url = publicUrl(key);
 
   try {
-    await q(
-      `INSERT INTO media (url, path, alt, size_bytes) VALUES ($1, $2, $3, $4)`,
-      [url, key, alt, file.size],
-    );
+    await insertMedia({ url, path: key, alt, size_bytes: file.size });
   } catch (e) {
     // Roll back: a stored object with no row is invisible in the library and undeletable.
     console.error("[upload] media row failed, rolling back the object:", e);
@@ -71,11 +68,11 @@ export async function DELETE(req: Request) {
   if (!path) return NextResponse.json({ error: "No path" }, { status: 400 });
 
   // path comes from the client; unchecked it would allow deleting any key in the bucket.
-  const row = await one<{ path: string }>(`SELECT path FROM media WHERE path = $1`, [path]);
+  const row = await findMediaByPath(path);
   if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await deleteObject(row.path);
-  await q(`DELETE FROM media WHERE path = $1`, [row.path]);
+  await deleteMediaByPath(row.path);
 
   return NextResponse.json({ ok: true });
 }

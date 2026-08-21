@@ -1,44 +1,41 @@
 import Link from "next/link";
-import { requireAuth } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/features/auth/services/session";
+import {
+  dailyTraffic, postStatusCounts, recentSubscribers, subscriberCount,
+  topPosts, trafficByCountry, trafficBySource, type PostPerformance,
+} from "@/features/analytics/queries";
 import { Shell, PageHead } from "@/components/Shell";
 import { ArrowUpRight, Eye, FileText, Mail, MousePointerClick, Users } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
-type Perf = {
-  slug: string; title: string; category: string; status: string;
-  views: number; visitors: number; store_clicks: number; click_rate_pct: number;
-};
+type Perf = PostPerformance;
 
 async function loadData() {
-  const db = supabaseAdmin();
-  const [posts, perf, countries, sources, daily, subs, recentSubs] = await Promise.all([
-    db.from("posts").select("id,status").limit(1000),
-    db.from("post_performance").select("*").order("views", { ascending: false }).limit(8),
-    db.from("traffic_by_country").select("*").limit(6),
-    db.from("traffic_by_source").select("*").limit(6),
-    db.from("daily_traffic").select("*").limit(30),
-    db.from("subscribers").select("id", { count: "exact", head: true }),
-    db.from("subscribers").select("email,source_path,country,created_at")
-      .order("created_at", { ascending: false }).limit(8),
+  const [statuses, rows, countries, sources, daily, subscribers, recentSubs] = await Promise.all([
+    postStatusCounts(),
+    topPosts(8),
+    trafficByCountry(6),
+    trafficBySource(6),
+    dailyTraffic(30),
+    subscriberCount(),
+    recentSubscribers(8),
   ]);
 
-  const all = posts.data ?? [];
-  const rows = (perf.data ?? []) as Perf[];
+  const byStatus = (s: string) => Number(statuses.find((r) => r.status === s)?.count ?? 0);
+
   return {
-    published: all.filter((p) => p.status === "published").length,
-    drafts: all.filter((p) => p.status === "draft").length,
+    published: byStatus("published"),
+    drafts: byStatus("draft"),
     views: rows.reduce((s, r) => s + Number(r.views || 0), 0),
     visitors: rows.reduce((s, r) => s + Number(r.visitors || 0), 0),
     clicks: rows.reduce((s, r) => s + Number(r.store_clicks || 0), 0),
     top: rows,
-    countries: countries.data ?? [],
-    sources: sources.data ?? [],
-    daily: daily.data ?? [],
-    subscribers: subs.count ?? 0,
-    recentSubs: (recentSubs.data ?? []) as
-      { email: string; source_path: string | null; country: string | null; created_at: string }[],
+    countries,
+    sources,
+    daily,
+    subscribers,
+    recentSubs,
   };
 }
 

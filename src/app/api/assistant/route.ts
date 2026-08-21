@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { isLoggedIn } from "@/lib/auth";
+import { isLoggedIn } from "@/features/auth/services/session";
 import { askJson } from "@/lib/ai";
-import { matchAuthorities, searchOpenAlex, type Source } from "@/lib/research";
+import { matchAuthorities, searchOpenAlex, type Source } from "@/features/assistant/services/research";
 
 /**
  * Getting this wrong is expensive: an earlier version said "its commercial goal

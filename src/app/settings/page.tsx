@@ -1,6 +1,6 @@
-import { requireAuth } from "@/lib/auth";
+import { requireAuth } from "@/features/auth/services/session";
 import { Shell, PageHead } from "@/components/Shell";
-import { CATEGORIES } from "@/lib/types";
+import { CATEGORIES } from "@/features/posts/constants";
 import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";

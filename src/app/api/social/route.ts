@@ -1,46 +1,8 @@
 import { NextResponse } from "next/server";
-import { isLoggedIn } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase";
-import { env } from "@/lib/env";
-
-/** Ask the blog to rebuild anything showing the social grid. */
-async function ping() {
-  if (!env.SITE_URL) return;
-  try {
-    await fetch(`${env.SITE_URL}/api/revalidate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-webhook-secret": env.REVALIDATE_SECRET,
-      },
-      body: JSON.stringify({ tag: "social" }),
-    });
-  } catch { /* non-fatal */ }
-}
-
-/**
- * Instagram's oEmbed endpoint needs a Facebook app token, so instead of
- * scraping we read the post's public Open Graph tags to prefill the thumbnail
- * and caption. Works for a normal public post; falls back to empty silently.
- */
-async function scrapeOg(permalink: string) {
-  try {
-    const res = await fetch(permalink, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; AskParentBot/1.0)" },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return {};
-    const html = await res.text();
-    const meta = (prop: string) =>
-      html.match(new RegExp(`<meta[^>]+property=["']${prop}["'][^>]+content=["']([^"']+)["']`, "i"))?.[1]
-      ?? html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${prop}["']`, "i"))?.[1];
-    const decode = (s?: string) =>
-      s?.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#039;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">");
-    return { image: decode(meta("og:image")) ?? "", caption: decode(meta("og:description")) ?? "" };
-  } catch {
-    return {};
-  }
-}
+import { isLoggedIn } from "@/features/auth/services/session";
+import { pingSite } from "@/lib/revalidate";
+import { clearFeatured, deleteSocial, insertSocial, updateSocial } from "@/features/social/queries";
+import { scrapeOpenGraph } from "@/features/social/services/og-scrape";
 
 export async function POST(req: Request) {
   if (!(await isLoggedIn())) {
@@ -48,22 +10,19 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
-  const db = supabaseAdmin();
 
-  // ---- delete ----
   if (body.action === "delete") {
-    await db.from("social_posts").delete().eq("id", body.id);
-    await ping();
+    await deleteSocial(body.id);
+    await pingSite({ tag: "social" });
     return NextResponse.json({ ok: true });
   }
 
-  // ---- fetch metadata for a pasted URL, without saving ----
+  // Fetch metadata for a pasted URL, without saving.
   if (body.action === "lookup") {
     if (!body.permalink) return NextResponse.json({ error: "Paste a post URL first." }, { status: 400 });
-    return NextResponse.json({ ok: true, ...(await scrapeOg(body.permalink)) });
+    return NextResponse.json({ ok: true, ...(await scrapeOpenGraph(body.permalink)) });
   }
 
-  // ---- create / update ----
   if (!body.permalink) {
     return NextResponse.json({ error: "A post URL is required." }, { status: 400 });
   }
@@ -83,22 +42,19 @@ export async function POST(req: Request) {
     featured: Boolean(body.featured),
   };
 
-  // Only one reel plays at the top, so featuring this one un-features the rest.
-  if (row.featured) {
-    await db.from("social_posts").update({ featured: false }).neq("id", body.id ?? "00000000-0000-0000-0000-000000000000");
-  }
+  if (row.featured) await clearFeatured(body.id);
 
-  const { error } = body.id
-    ? await db.from("social_posts").update(row).eq("id", body.id)
-    : await db.from("social_posts").insert(row);
-
-  if (error) {
-    const msg = /column .* does not exist/i.test(error.message)
-      ? `${error.message} — re-run supabase/0002_social_and_backlinks.sql, it now adds the video columns.`
-      : error.message;
+  try {
+    if (body.id) await updateSocial(body.id, row);
+    else await insertSocial(row);
+  } catch (e) {
+    const message = (e as Error).message;
+    const msg = /column .* does not exist/i.test(message)
+      ? `${message} — re-run db/0002_social_and_backlinks.sql, it adds the video columns.`
+      : message;
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 
-  await ping();
+  await pingSite({ tag: "social" });
   return NextResponse.json({ ok: true });
 }

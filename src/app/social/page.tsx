@@ -1,14 +1,13 @@
-import { requireAuth } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/features/auth/services/session";
+import { listSocial } from "@/features/social/queries";
 import { Shell, PageHead } from "@/components/Shell";
-import { SocialManager, type SocialRow } from "@/components/SocialManager";
+import { SocialManager, type SocialRow } from "@/features/social/components/SocialManager";
 
 export const dynamic = "force-dynamic";
 
 export default async function SocialPage() {
   await requireAuth();
-  const db = supabaseAdmin();
-  const { data } = await db.from("social_posts").select("*").order("position", { ascending: true });
+  const data = await listSocial();
 
   return (
     <Shell>

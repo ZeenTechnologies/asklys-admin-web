@@ -6,10 +6,9 @@ import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
 import "@blocknote/core/fonts/inter.css";
 import "@blocknote/mantine/style.css";
-import {
-  CATEGORIES, CARD_STYLES, FONT_STYLES, POST_TYPES, slugify,
-  type CardStyle, type FAQItem, type FontStyle, type Post, type PostType,
-} from "@/lib/types";
+import type { CardStyle, FAQItem, FontStyle, Post, PostType } from "@/features/posts/queries";
+import { CATEGORIES, CARD_STYLES, FONT_STYLES, POST_TYPES } from "@/features/posts/constants";
+import { slugify } from "@/features/posts/services/slug";
 import { Eye, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
 import { CoverPicker } from "./CoverPicker";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { Post } from "@/lib/types";
+import type { Post } from "@/features/posts/queries";
 
 /**
  * BlockNote touches `window` at construction, so the editor can never be

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { Eye } from "lucide-react";
-import { requireAuth } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/features/auth/services/session";
+import { listPosts } from "@/features/posts/queries";
 import { Shell, PageHead } from "@/components/Shell";
-import type { Post } from "@/lib/types";
+import type { Post } from "@/features/posts/queries";
 import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
@@ -21,13 +21,7 @@ const SECRET = env.REVALIDATE_SECRET;
 
 export default async function PostsPage() {
   await requireAuth();
-  const db = supabaseAdmin();
-  const { data } = await db
-    .from("posts")
-    .select("id,slug,title,category,post_type,status,featured,published_at,updated_at")
-    .order("updated_at", { ascending: false });
-
-  const posts = (data ?? []) as Partial<Post>[];
+  const posts = (await listPosts()) as Partial<Post>[];
 
   return (
     <Shell>

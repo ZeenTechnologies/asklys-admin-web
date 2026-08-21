@@ -13,7 +13,6 @@
     "@blocknote/core": "^0.42.0",
     "@blocknote/mantine": "^0.42.0",
     "@blocknote/react": "^0.42.0",
-    "@supabase/supabase-js": "^2.60.0",
     "lucide-react": "^1.18.0",
     "next": "16.2.9",
     "pg": "^8.23.0",

@@ -4,8 +4,11 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import { createHash, randomBytes } from "node:crypto";
-import { q, one } from "./db";
 import { verifyPassword } from "./password";
+import {
+  createSession, deleteAllSessions, deleteExpiredSessions, deleteSession,
+  findCredentials, findUserBySessionToken, touchLastLogin, type SessionUser,
+} from "../queries";
 
 const COOKIE = "asklys_session";
 const SESSION_DAYS = 30;
@@ -13,21 +16,14 @@ const SESSION_DAYS = 30;
 // Only the hash is stored, so a leaked database dump can't be used to log in.
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
 
-export type SessionUser = { id: string; email: string; name: string | null };
+export type { SessionUser };
 
 // cache() so the many requireAuth() calls in one render share a single query.
 export const currentUser = cache(async (): Promise<SessionUser | null> => {
   const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
 
-  return one<SessionUser>(
-    `SELECT u.id, u.email, u.name
-       FROM sessions s
-       JOIN users u ON u.id = s.user_id
-      WHERE s.token_hash = $1
-        AND s.expires_at > now()`,
-    [hashToken(token)],
-  );
+  return findUserBySessionToken(hashToken(token));
 });
 
 export async function isLoggedIn(): Promise<boolean> {
@@ -66,10 +62,7 @@ export async function signIn(email: string, password: string): Promise<SignInRes
   const key = email.trim().toLowerCase();
   if (throttled(key)) return { ok: false, reason: "throttled" };
 
-  const user = await one<{ id: string; password_hash: string }>(
-    `SELECT id, password_hash FROM users WHERE lower(email) = $1`,
-    [key],
-  );
+  const user = await findCredentials(key);
 
   // Hash even when the user doesn't exist, so timing doesn't reveal which emails are registered.
   const stored = user?.password_hash ?? "scrypt$65536$8$1$AAAAAAAAAAAAAAAAAAAAAA==$AAAA";
@@ -85,18 +78,14 @@ export async function signIn(email: string, password: string): Promise<SignInRes
   const h = await headers();
   const expires = new Date(Date.now() + SESSION_DAYS * 864e5);
 
-  await q(
-    `INSERT INTO sessions (user_id, token_hash, user_agent, ip, expires_at)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [
-      user.id,
-      hashToken(token),
-      h.get("user-agent")?.slice(0, 400) ?? null,
-      h.get("x-forwarded-for")?.split(",")[0].trim() ?? null,
-      expires,
-    ],
-  );
-  await q(`UPDATE users SET last_login_at = now() WHERE id = $1`, [user.id]);
+  await createSession({
+    userId: user.id,
+    tokenHash: hashToken(token),
+    userAgent: h.get("user-agent")?.slice(0, 400) ?? null,
+    ip: h.get("x-forwarded-for")?.split(",")[0].trim() ?? null,
+    expires,
+  });
+  await touchLastLogin(user.id);
 
   (await cookies()).set(COOKIE, token, {
     httpOnly: true,
@@ -113,14 +102,14 @@ export async function signIn(email: string, password: string): Promise<SignInRes
 export async function signOut(): Promise<void> {
   const jar = await cookies();
   const token = jar.get(COOKIE)?.value;
-  if (token) await q(`DELETE FROM sessions WHERE token_hash = $1`, [hashToken(token)]);
+  if (token) await deleteSession(hashToken(token));
   jar.delete(COOKIE);
 }
 
 export async function signOutAllSessions(userId: string): Promise<void> {
-  await q(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
+  await deleteAllSessions(userId);
 }
 
 export async function purgeExpiredSessions(): Promise<void> {
-  await q(`DELETE FROM sessions WHERE expires_at < now()`);
+  await deleteExpiredSessions();
 }

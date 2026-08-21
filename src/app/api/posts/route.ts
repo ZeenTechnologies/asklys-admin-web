@@ -1,28 +1,10 @@
 import { NextResponse } from "next/server";
-import { isLoggedIn } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { isLoggedIn } from "@/features/auth/services/session";
 import { embed } from "@/lib/ai";
-import { env } from "@/lib/env";
+import { pingSite } from "@/lib/revalidate";
+import { freeSlug, insertPost, updatePost, type PostInput } from "@/features/posts/queries";
 
-/**
- * Find the first free variant of a taken slug: `my-post` → `my-post-2`, `-3`…
- * Capped so a pathological case can't loop forever.
- */
-async function freeSlug(
-  db: ReturnType<typeof supabaseAdmin>,
-  base: string,
-): Promise<string> {
-  const stem = base.replace(/-\d+$/, ""); // don't produce my-post-2-2
-  const { data } = await db.from("posts").select("slug").like("slug", `${stem}%`);
-  const taken = new Set((data ?? []).map((r) => (r as { slug: string }).slug));
-  for (let n = 2; n < 50; n++) {
-    const candidate = `${stem}-${n}`;
-    if (!taken.has(candidate)) return candidate;
-  }
-  return `${stem}-${Date.now().toString().slice(-5)}`;
-}
-
-/** Create or update a post, then ping the blog to refresh. */
+// Create or update a post, then ping the site to refresh.
 export async function POST(req: Request) {
   if (!(await isLoggedIn())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -35,61 +17,47 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Title and slug are required" }, { status: 400 });
   }
 
-  const words = String(body_markdown ?? "").trim().split(/\s+/).length;
-  const row: Record<string, unknown> = {
+  const markdown = String(body_markdown ?? "");
+  const words = markdown.trim().split(/\s+/).length;
+
+  const input: PostInput = {
     ...fields,
-    body_html: body_markdown ?? "",
+    body_html: markdown,
     read_mins: Math.max(1, Math.round(words / 220)),
     published_at:
       fields.status === "published" ? (body.published_at ?? new Date().toISOString()) : null,
   };
 
-  // embedding powers "related posts" on the blog — best effort, never blocks a save
+  // Embedding powers related posts on the site — best effort, never blocks a save.
   try {
-    const v = await embed(`${fields.title}\n${fields.excerpt ?? ""}\n${String(body_markdown ?? "").slice(0, 4000)}`);
-    if (v.length) row.embedding = v;
+    const v = await embed(`${fields.title}\n${fields.excerpt ?? ""}\n${markdown.slice(0, 4000)}`);
+    if (v.length) input.embedding = v;
   } catch (e) {
     console.warn("[posts] embedding skipped:", e);
   }
 
-  const db = supabaseAdmin();
-  const q = id
-    ? db.from("posts").update(row).eq("id", id).select("slug").single()
-    : db.from("posts").insert(row).select("slug").single();
-
-  const { data, error } = await q;
-  if (error) {
-    // 23505 = unique violation on `slug`. Say which slug clashed and hand back
-    // a free one, so the fix is a single click rather than a guessing game.
-    if (error.code === "23505") {
-      const suggestion = await freeSlug(db, String(fields.slug));
+  let saved: { slug: string } | null;
+  try {
+    saved = id ? await updatePost(String(id), input) : await insertPost(input);
+  } catch (e) {
+    // 23505 = duplicate slug. Hand back a free one so the fix is one click.
+    if ((e as { code?: string }).code === "23505") {
       return NextResponse.json(
         {
           error: `The URL /blog/${fields.slug} is already used by another post.`,
           conflictSlug: fields.slug,
-          suggestion,
+          suggestion: await freeSlug(String(fields.slug)),
         },
         { status: 409 },
       );
     }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    console.error("[posts] save failed:", e);
+    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
 
-  // tell the blog to rebuild this page
-  if (fields.status === "published" && env.SITE_URL) {
-    try {
-      await fetch(`${env.SITE_URL}/api/revalidate`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-webhook-secret": env.REVALIDATE_SECRET,
-        },
-        body: JSON.stringify({ slug: data.slug }),
-      });
-    } catch (e) {
-      console.warn("[posts] revalidate ping failed:", e);
-    }
-  }
+  if (!saved) return NextResponse.json({ error: "Post not found" }, { status: 404 });
 
-  return NextResponse.json({ ok: true, slug: data.slug });
+  if (fields.status === "published") await pingSite({ slug: saved.slug });
+
+  return NextResponse.json({ ok: true, slug: saved.slug });
 }

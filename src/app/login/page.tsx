@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { isLoggedIn, signIn } from "@/lib/auth";
+import { isLoggedIn, signIn } from "@/features/auth/services/session";
 
 export default async function LoginPage({
   searchParams,

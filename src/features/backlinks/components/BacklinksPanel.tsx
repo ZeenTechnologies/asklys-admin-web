@@ -6,29 +6,8 @@ import {
   ArrowUpRight, Check, ExternalLink, Loader2, Plus, RefreshCw, Sparkles, Trash2,
 } from "lucide-react";
 
-export type Backlink = {
-  id: string;
-  domain: string;
-  url: string | null;
-  target_path: string | null;
-  anchor: string | null;
-  kind: string;
-  status: string;
-  authority: number | null;
-  dofollow: boolean;
-  referrals: number;
-  notes: string;
-  first_seen: string;
-  last_seen: string | null;
-};
-
-export type ReferringDomain = {
-  domain: string;
-  sessions: number;
-  visitors: number;
-  landing_pages: number;
-  last_seen: string;
-};
+export type { Backlink, ReferringDomain } from "../queries";
+import type { Backlink, ReferringDomain } from "../queries";
 
 type Target = {
   name: string; type: string; why: string; pitch: string; effort: "low" | "medium" | "high";

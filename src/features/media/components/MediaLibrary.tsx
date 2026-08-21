@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Copy, Loader2, Trash2, Upload } from "lucide-react";
 
-type MediaItem = { id: string; url: string; path: string; alt: string; size_bytes: number; created_at: string };
+import type { MediaItem } from "../queries";
 
 const kb = (n: number) => (n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`);
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isLoggedIn } from "@/lib/auth";
+import { isLoggedIn } from "@/features/auth/services/session";
 import { ask, askJson } from "@/lib/ai";
 
 const VOICE = `You write for Ask Parent, an independent publication about screen time,

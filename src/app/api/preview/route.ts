@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
-import { isLoggedIn } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { isLoggedIn } from "@/features/auth/services/session";
 import { env } from "@/lib/env";
+import { freeSlug, insertPost, updatePost, type PostInput } from "@/features/posts/queries";
 
-/**
- * Save the current editor state as a draft and hand back a signed preview URL.
- *
- * The preview secret never reaches the browser — the composer just opens the
- * URL this route returns.
- */
+// Save the editor state as a draft and return a signed preview URL.
+// The secret never reaches the browser — the composer just opens the URL this returns.
 export async function POST(req: Request) {
   if (!(await isLoggedIn())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -21,47 +17,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Give the post a title first." }, { status: 400 });
   }
 
-  const words = String(body_markdown ?? "").trim().split(/\s+/).length;
-  const row: Record<string, unknown> = {
-    ...fields,
-    body_html: body_markdown ?? "",
-    read_mins: Math.max(1, Math.round(words / 220)),
-  };
-  // Previewing must never publish, and must never un-publish something live.
-  delete row.status;
-  delete row.published_at;
+  const markdown = String(body_markdown ?? "");
+  const words = markdown.trim().split(/\s+/).length;
 
-  const db = supabaseAdmin();
-  const q = id
-    ? db.from("posts").update(row).eq("id", id).select("slug").single()
-    : db.from("posts").insert({ ...row, status: "draft" }).select("slug").single();
+  const input: PostInput = { ...fields, body_html: markdown, read_mins: Math.max(1, Math.round(words / 220)) };
+  // Previewing must never publish, and never un-publish something already live.
+  delete input.status;
+  delete input.published_at;
 
-  const { data, error } = await q;
-  if (error) {
-    if (error.code === "23505") {
-      // mirror /api/posts: name the clash and offer a free slug
-      const stem = String(fields.slug).replace(/-\d+$/, "");
-      const { data: similar } = await db.from("posts").select("slug").like("slug", `${stem}%`);
-      const taken = new Set((similar ?? []).map((r) => (r as { slug: string }).slug));
-      let suggestion = `${stem}-2`;
-      for (let n = 2; n < 50; n++) {
-        if (!taken.has(`${stem}-${n}`)) { suggestion = `${stem}-${n}`; break; }
-      }
+  let saved: { slug: string } | null;
+  try {
+    saved = id ? await updatePost(String(id), input) : await insertPost({ ...input, status: "draft" });
+  } catch (e) {
+    if ((e as { code?: string }).code === "23505") {
       return NextResponse.json(
         {
           error: `The URL /blog/${fields.slug} is already used by another post.`,
           conflictSlug: fields.slug,
-          suggestion,
+          suggestion: await freeSlug(String(fields.slug)),
         },
         { status: 409 },
       );
     }
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
   }
 
-  const blog = env.SITE_URL;
-  const secret = env.REVALIDATE_SECRET;
-  if (!blog || !secret) {
+  if (!saved) return NextResponse.json({ error: "Post not found" }, { status: 404 });
+
+  if (!env.SITE_URL || !env.REVALIDATE_SECRET) {
     return NextResponse.json(
       { error: "Set SITE_URL and REVALIDATE_SECRET in .env.local to enable preview." },
       { status: 500 },
@@ -70,7 +53,7 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     ok: true,
-    slug: data.slug,
-    url: `${blog}/preview/${data.slug}?token=${encodeURIComponent(secret)}`,
+    slug: saved.slug,
+    url: `${env.SITE_URL}/preview/${saved.slug}?token=${encodeURIComponent(env.REVALIDATE_SECRET)}`,
   });
 }

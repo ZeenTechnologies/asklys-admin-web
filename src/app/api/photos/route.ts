@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { isLoggedIn } from "@/lib/auth";
+import { isLoggedIn } from "@/features/auth/services/session";
 import { env } from "@/lib/env";
 
 /**

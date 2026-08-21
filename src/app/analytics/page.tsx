@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { requireAuth } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { requireAuth } from "@/features/auth/services/session";
+import { filterOptions, filteredClicks, filteredViews, type ClickRow, type ViewRow } from "@/features/analytics/queries";
+import { postsForFilter } from "@/features/posts/queries";
 import { Shell, PageHead } from "@/components/Shell";
-import { BarList, TrafficChart } from "@/components/Charts";
-import { AnalyticsFilters } from "@/components/AnalyticsFilters";
-import { COUNTRY_NAMES } from "@/lib/countries";
+import { BarList, TrafficChart } from "@/features/analytics/components/Charts";
+import { AnalyticsFilters } from "@/features/analytics/components/Filters";
+import { COUNTRY_NAMES } from "@/features/analytics/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -23,16 +24,8 @@ type Search = {
   country?: string; source?: string; device?: string; slug?: string; q?: string;
 };
 
-type View = {
-  post_slug: string | null; path: string; country: string | null;
-  source: string | null; device: string | null; browser: string | null;
-  visitor_hash: string | null; created_at: string;
-};
-
-type Click = {
-  post_slug: string | null; link_type: string | null; link_url: string;
-  country: string | null; source: string | null; created_at: string;
-};
+type View = ViewRow;
+type Click = ClickRow;
 
 const dayKey = (iso: string) => iso.slice(0, 10);
 
@@ -63,37 +56,13 @@ export default async function AnalyticsPage({
       : new Date(Date.now() - Number(preset) * 864e5);
   const to = sp.to ? new Date(`${sp.to}T23:59:59Z`) : new Date();
 
-  const db = supabaseAdmin();
+  const filters = { from, to, country: sp.country, source: sp.source, device: sp.device, slug: sp.slug };
 
-  // ---- filtered raw rows ----
-  let vq = db
-    .from("pageviews")
-    .select("post_slug,path,country,source,device,browser,visitor_hash,created_at")
-    .gte("created_at", from.toISOString())
-    .lte("created_at", to.toISOString())
-    .order("created_at", { ascending: false })
-    .limit(ROW_CAP);
-
-  let cq = db
-    .from("clicks")
-    .select("post_slug,link_type,link_url,country,source,created_at")
-    .gte("created_at", from.toISOString())
-    .lte("created_at", to.toISOString())
-    .order("created_at", { ascending: false })
-    .limit(ROW_CAP);
-
-  if (sp.country) { vq = vq.eq("country", sp.country); cq = cq.eq("country", sp.country); }
-  if (sp.source)  { vq = vq.eq("source", sp.source);   cq = cq.eq("source", sp.source); }
-  if (sp.device)  { vq = vq.eq("device", sp.device); }
-  if (sp.slug)    { vq = vq.eq("post_slug", sp.slug);  cq = cq.eq("post_slug", sp.slug); }
-
-  const [viewsRes, clicksRes, postsRes] = await Promise.all([
-    vq,
-    cq,
-    db.from("posts").select("slug,title,category").order("title"),
+  const [allViews, allClicks, posts] = await Promise.all([
+    filteredViews(filters, ROW_CAP),
+    filteredClicks(filters, ROW_CAP),
+    postsForFilter(),
   ]);
-
-  const posts = (postsRes.data ?? []) as { slug: string; title: string; category: string }[];
   const titleOf = new Map(posts.map((p) => [p.slug, p.title]));
   const catOf = new Map(posts.map((p) => [p.slug, p.category]));
 
@@ -105,8 +74,8 @@ export default async function AnalyticsPage({
     (slug ?? "").toLowerCase().includes(needle) ||
     (titleOf.get(slug ?? "") ?? "").toLowerCase().includes(needle);
 
-  const views = ((viewsRes.data ?? []) as View[]).filter((v) => matches(v.post_slug, v.path));
-  const clicks = ((clicksRes.data ?? []) as Click[]).filter((c) =>
+  const views = allViews.filter((v) => matches(v.post_slug, v.path));
+  const clicks = allClicks.filter((c) =>
     matches(c.post_slug, c.post_slug ? `/blog/${c.post_slug}` : ""),
   );
 
@@ -168,19 +137,11 @@ export default async function AnalyticsPage({
     .sort((a, b) => b.views - a.views)
     .slice(0, 30);
 
-  // ---- filter dropdown options (unfiltered, so you can always switch) ----
-  const [allCountries, allSources, allDevices] = await Promise.all([
-    db.from("traffic_by_country").select("country").limit(60),
-    db.from("traffic_by_source").select("source").limit(30),
-    db.from("pageviews").select("device").limit(2000),
-  ]);
+  const opts = await filterOptions();
   const options = {
-    countries: (allCountries.data ?? [])
-      .map((r) => (r as { country: string }).country)
-      .filter(Boolean)
-      .map((code) => ({ code, name: COUNTRY_NAMES[code] ?? code })),
-    sources: (allSources.data ?? []).map((r) => (r as { source: string }).source).filter(Boolean),
-    devices: [...new Set((allDevices.data ?? []).map((r) => (r as { device: string }).device).filter(Boolean))],
+    countries: opts.countries.map((code) => ({ code, name: COUNTRY_NAMES[code] ?? code })),
+    sources: opts.sources,
+    devices: opts.devices,
     posts: posts.map((p) => ({ slug: p.slug, title: p.title })),
   };
 

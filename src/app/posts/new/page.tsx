@@ -1,6 +1,6 @@
-import { requireAuth } from "@/lib/auth";
+import { requireAuth } from "@/features/auth/services/session";
 import { Shell, PageHead } from "@/components/Shell";
-import { ComposerLoader } from "@/components/ComposerLoader";
+import { ComposerLoader } from "@/features/posts/components/ComposerLoader";
 
 export default async function NewPostPage() {
   await requireAuth();

@@ -1,37 +1,6 @@
-export type PostType = "article" | "listicle" | "comparison" | "how-to" | "news";
-export type CardStyle = "hero" | "standard" | "compact" | "featured";
-export type FontStyle = "default" | "serif" | "editorial";
-export type PostStatus = "draft" | "scheduled" | "published";
-
-export type FAQItem = { q: string; a: string };
-
-export type Post = {
-  id: string;
-  slug: string;
-  title: string;
-  excerpt: string;
-  body_json: unknown;
-  body_html: string;
-  category: string;
-  author: string;
-  post_type: PostType;
-  card_style: CardStyle;
-  font_style: FontStyle;
-  cover_image: string;
-  cover_alt: string;
-  seo_title: string | null;
-  seo_description: string | null;
-  keywords: string[];
-  tags: string[];
-  faq: FAQItem[];
-  featured: boolean;
-  status: PostStatus;
-  published_at: string | null;
-  scheduled_for: string | null;
-  read_mins: number;
-  created_at: string;
-  updated_at: string;
-};
+// UI option lists for the composer. Runtime values, so they must live outside
+// queries.ts — importing that from a client component would pull the pg pool in.
+import type { PostType, CardStyle, FontStyle } from "./queries";
 
 export const CATEGORIES = [
   { slug: "screen-time", name: "Screen Time" },
@@ -63,10 +32,3 @@ export const FONT_STYLES: { value: FontStyle; label: string; hint: string }[] = 
   { value: "serif", label: "Serif", hint: "Editorial, long-read feel" },
   { value: "editorial", label: "Editorial", hint: "Larger type, wider leading" },
 ];
-
-export const slugify = (s: string) =>
-  s.toLowerCase().trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 80);
