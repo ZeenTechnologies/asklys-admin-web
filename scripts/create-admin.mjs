@@ -1,16 +1,6 @@
-/**
- * Create (or update) an admin account.
- *
- *   node scripts/create-admin.mjs
- *   node scripts/create-admin.mjs ibrahim@example.com "Ibrahim"
- *
- * The password is typed at a prompt, never passed as an argument — arguments
- * end up in shell history and in `ps` output. Nothing secret lives in this file,
- * which is why it belongs in git: anyone with database access can run it.
- *
- * Re-running with an existing email resets that account's password and signs
- * out its existing sessions.
- */
+// Create or update an admin account:  node scripts/create-admin.mjs [email] [name]
+// Password is prompted, never an argument (arguments leak via shell history and ps).
+// Re-running on an existing email resets the password and signs that account out everywhere.
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout, argv, exit } from "node:process";
 import pg from "pg";
@@ -28,7 +18,7 @@ if (!DATABASE_URL) {
 const CTRL_C = "\u0003";
 const BACKSPACE = ["\u007f", "\u0008"];
 
-/** Read a line without echoing it, so the password never appears on screen. */
+// Read a line without echoing, so the password never appears on screen.
 async function secret(prompt) {
   stdout.write(prompt);
   const wasRaw = Boolean(stdin.isRaw);
@@ -86,8 +76,7 @@ await db.connect();
 try {
   const password_hash = await hashPassword(password);
 
-  // `xmax = 0` is true only for a freshly inserted row, which is how we tell a
-  // new account apart from a password reset.
+  // xmax = 0 is true only for a freshly inserted row: new account vs password reset.
   const { rows } = await db.query(
     `INSERT INTO users (email, name, password_hash)
      VALUES ($1, $2, $3)
@@ -103,7 +92,7 @@ try {
   if (created) {
     console.log(`Created admin ${email}.`);
   } else {
-    // A password reset should not leave old sessions alive.
+    // A password reset must not leave old sessions alive.
     const { rowCount } = await db.query(`DELETE FROM sessions WHERE user_id = $1`, [id]);
     console.log(`Password updated for ${email}. ${rowCount} existing session(s) signed out.`);
   }
