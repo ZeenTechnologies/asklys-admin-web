@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isLoggedIn } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { env } from "@/lib/env";
 
 /**
  * Save the current editor state as a draft and hand back a signed preview URL.
@@ -58,11 +59,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  const blog = process.env.BLOG_URL;
-  const secret = process.env.REVALIDATE_SECRET;
+  const blog = env.SITE_URL;
+  const secret = env.REVALIDATE_SECRET;
   if (!blog || !secret) {
     return NextResponse.json(
-      { error: "Set BLOG_URL and REVALIDATE_SECRET in .env.local to enable preview." },
+      { error: "Set SITE_URL and REVALIDATE_SECRET in .env.local to enable preview." },
       { status: 500 },
     );
   }

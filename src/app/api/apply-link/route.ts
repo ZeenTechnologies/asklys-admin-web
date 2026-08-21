@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { isLoggedIn } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { env } from "@/lib/env";
 
 /**
  * Insert an internal link into a post's body.
@@ -81,13 +82,13 @@ export async function POST(req: Request) {
   // so the markdown stays the single source of truth.
   await db.from("posts").update({ body_html: markdown, body_json: null }).eq("id", from.id);
 
-  if (process.env.BLOG_URL) {
+  if (env.SITE_URL) {
     try {
-      await fetch(`${process.env.BLOG_URL}/api/revalidate`, {
+      await fetch(`${env.SITE_URL}/api/revalidate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-webhook-secret": process.env.REVALIDATE_SECRET ?? "",
+          "x-webhook-secret": env.REVALIDATE_SECRET,
         },
         body: JSON.stringify({ slug: from.slug }),
       });

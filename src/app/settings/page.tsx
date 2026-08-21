@@ -1,6 +1,7 @@
 import { requireAuth } from "@/lib/auth";
 import { Shell, PageHead } from "@/components/Shell";
 import { CATEGORIES } from "@/lib/types";
+import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -24,30 +25,18 @@ function Row({ label, ok, detail }: { label: string; ok: boolean; detail: string
 
 export default async function SettingsPage() {
   await requireAuth();
-  const devBypass = process.env.DEV_SKIP_AUTH === "1";
 
   return (
     <Shell>
       <PageHead title="Settings" subtitle="Connections and publishing configuration." />
 
       <div className="p-8 space-y-6 max-w-3xl">
-        {devBypass && (
-          <div className="rounded-xl border border-amber-300 bg-amber-50 p-5">
-            <p className="font-extrabold text-amber-900">Development login bypass is ON</p>
-            <p className="mt-1 text-[14px] text-amber-800">
-              Anyone who can reach this server gets in without a password. It cannot apply to a
-              production build, but remove <code className="font-mono">DEV_SKIP_AUTH=1</code> from
-              <code className="font-mono"> .env.local</code> before deploying.
-            </p>
-          </div>
-        )}
-
         <section className="rounded-xl border border-line bg-white p-5">
           <h2 className="font-extrabold text-ink mb-2">Connections</h2>
-          <Row label="Supabase" ok={has(process.env.NEXT_PUBLIC_SUPABASE_URL)} detail="Posts, media and analytics database" />
-          <Row label="Groq" ok={has(process.env.GROQ_API_KEY)} detail="Drafting, SEO and FAQ generation" />
-          <Row label="Gemini" ok={has(process.env.GEMINI_API_KEY)} detail="Embeddings for related-post recommendations" />
-          <Row label="Blog webhook" ok={has(process.env.BLOG_URL)} detail={process.env.BLOG_URL || "Publishing target not set"} />
+          <Row label="Postgres" ok={has(env.DATABASE_URL)} detail="Posts, media and analytics database" />
+          <Row label="Groq" ok={has(env.GROQ_API_KEY)} detail="Drafting, SEO and FAQ generation" />
+          <Row label="Gemini" ok={has(env.GEMINI_API_KEY)} detail="Embeddings for related-post recommendations" />
+          <Row label="Site webhook" ok={has(env.SITE_URL)} detail={env.SITE_URL || "Publishing target not set"} />
         </section>
 
         <section className="rounded-xl border border-line bg-white p-5">

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isLoggedIn } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { embed } from "@/lib/ai";
+import { env } from "@/lib/env";
 
 /**
  * Find the first free variant of a taken slug: `my-post` → `my-post-2`, `-3`…
@@ -75,13 +76,13 @@ export async function POST(req: Request) {
   }
 
   // tell the blog to rebuild this page
-  if (fields.status === "published" && process.env.BLOG_URL) {
+  if (fields.status === "published" && env.SITE_URL) {
     try {
-      await fetch(`${process.env.BLOG_URL}/api/revalidate`, {
+      await fetch(`${env.SITE_URL}/api/revalidate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-webhook-secret": process.env.REVALIDATE_SECRET ?? "",
+          "x-webhook-secret": env.REVALIDATE_SECRET,
         },
         body: JSON.stringify({ slug: data.slug }),
       });

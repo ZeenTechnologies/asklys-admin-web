@@ -11,9 +11,6 @@ function token() {
 }
 
 export async function isLoggedIn() {
-  // Local-only convenience so you don't log in on every reload while developing.
-  // Hard-guarded: can never apply to a production build.
-  if (process.env.NODE_ENV !== "production" && process.env.DEV_SKIP_AUTH === "1") return true;
   const jar = await cookies();
   return jar.get(COOKIE)?.value === token();
 }

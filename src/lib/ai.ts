@@ -1,3 +1,4 @@
+import { env } from "./env";
 /**
  * AI layer — Groq for text work, Gemini as the backstop + embeddings.
  *
@@ -19,8 +20,8 @@
  * which breaks askJson.
  */
 
-const GROQ_KEY = process.env.GROQ_API_KEY ?? "";
-const GEMINI_KEY = process.env.GEMINI_API_KEY ?? "";
+const GROQ_KEY = env.GROQ_API_KEY;
+const GEMINI_KEY = env.GEMINI_API_KEY;
 
 /** Tried in order; first one that answers wins. */
 const GROQ_MODELS = ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "groq/compound"];

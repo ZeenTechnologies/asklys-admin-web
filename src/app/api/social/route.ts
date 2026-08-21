@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { isLoggedIn } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { env } from "@/lib/env";
 
 /** Ask the blog to rebuild anything showing the social grid. */
 async function ping() {
-  if (!process.env.BLOG_URL) return;
+  if (!env.SITE_URL) return;
   try {
-    await fetch(`${process.env.BLOG_URL}/api/revalidate`, {
+    await fetch(`${env.SITE_URL}/api/revalidate`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-webhook-secret": process.env.REVALIDATE_SECRET ?? "",
+        "x-webhook-secret": env.REVALIDATE_SECRET,
       },
       body: JSON.stringify({ tag: "social" }),
     });

@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { Shell, PageHead } from "@/components/Shell";
 import type { Post } from "@/lib/types";
+import { env } from "@/lib/env";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +16,8 @@ const STATUS_STYLE: Record<string, string> = {
 
 // This is a server component, so the preview secret is only ever used to build
 // the href — it is not shipped to the browser as a variable.
-const BLOG = process.env.BLOG_URL ?? "";
-const SECRET = process.env.REVALIDATE_SECRET ?? "";
+const BLOG = env.SITE_URL;
+const SECRET = env.REVALIDATE_SECRET;
 
 export default async function PostsPage() {
   await requireAuth();

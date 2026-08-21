@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { isLoggedIn } from "@/lib/auth";
+import { env } from "@/lib/env";
 
 /**
  * Stock photo search for the composer's cover-image picker.
@@ -11,7 +12,7 @@ import { isLoggedIn } from "@/lib/auth";
  * read from this app's env first, else from Desktop\Total\PV\.env.
  */
 const KEY = (() => {
-  if (process.env.PEXELS_API_KEY) return process.env.PEXELS_API_KEY;
+  if (env.PEXELS_API_KEY) return env.PEXELS_API_KEY;
   try {
     const p = path.join(process.cwd(), "..", "PV", ".env");
     return readFileSync(p, "utf8").match(/^PEXELS_API_KEY=(.+)$/m)?.[1].trim() ?? "";

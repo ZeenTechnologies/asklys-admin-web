@@ -9,20 +9,22 @@
  * so the pool is stashed on globalThis in development; without that you exhaust
  * Postgres connections after a dozen saves.
  */
+import "server-only";
 import { Pool, type QueryResultRow } from "pg";
+import { env } from "./env";
 
 const g = globalThis as unknown as { _pgPool?: Pool };
 
 export const pool =
   g._pgPool ??
   new Pool({
-    connectionString: process.env.DATABASE_URL,
+    connectionString: env.DATABASE_URL,
     max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 10_000,
   });
 
-if (process.env.NODE_ENV !== "production") g._pgPool = pool;
+if (!env.isProd) g._pgPool = pool;
 
 /** Rows from a parameterised query. Always use $1/$2 — never string interpolation. */
 export async function q<T extends QueryResultRow>(
