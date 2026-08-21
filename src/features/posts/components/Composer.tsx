@@ -57,6 +57,7 @@ export function Composer({ initial }: Props) {
         if (blocks?.length) editor.replaceBlocks(editor.document, blocks);
       })();
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot hydration flag; the `hydrated` guard above prevents re-entry
     setHydrated(true);
   }, [editor, initial?.body_json, initial?.body_html, hydrated]);
 

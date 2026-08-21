@@ -48,13 +48,15 @@ export default async function AnalyticsPage({
   const sp = await searchParams;
 
   // ---- window ----
+  // eslint-disable-next-line react-hooks/purity -- force-dynamic server component: renders once per request, and "now" is the point
+  const now = Date.now();
   const preset = sp.days ?? "30";
   const from = sp.from
     ? new Date(`${sp.from}T00:00:00Z`)
     : preset === "all"
       ? new Date("2000-01-01")
-      : new Date(Date.now() - Number(preset) * 864e5);
-  const to = sp.to ? new Date(`${sp.to}T23:59:59Z`) : new Date();
+      : new Date(now - Number(preset) * 864e5);
+  const to = sp.to ? new Date(`${sp.to}T23:59:59Z`) : new Date(now);
 
   const filters = { from, to, country: sp.country, source: sp.source, device: sp.device, slug: sp.slug };
 
