@@ -1,64 +1,44 @@
-/**
- * Reset the database to a clean launch state.
- *
- *   node scripts/seed-starter.mjs
- *
- * WIPES every table (posts, traffic, subscribers, backlinks, social) and then
- * imports the nine real starter articles from the blog's markdown as published
- * posts. No fake traffic, no invented subscribers — the numbers start at zero,
- * which is what you want the day you launch.
- *
- * Run scripts/backfill-embeddings.mjs afterwards so "related reading" works.
- */
+// Reset the database to a clean launch state:  node scripts/seed-starter.mjs
+// WIPES posts, traffic, subscribers, backlinks and social, then imports the nine
+// starter articles from db/seed as published posts. No fake traffic, no invented
+// subscribers — the numbers start at zero, which is what you want on launch day.
+// Run scripts/backfill-embeddings.mjs afterwards so "related reading" works.
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import matter from "../../pv-blog/node_modules/gray-matter/index.js";
+import { fileURLToPath } from "node:url";
+import { createInterface } from "node:readline/promises";
+import { stdin, stdout, exit } from "node:process";
+import pg from "pg";
+import matter from "gray-matter";
 
-const env = Object.fromEntries(
-  readFileSync(new URL("../.env.local", import.meta.url), "utf8")
-    .split("\n")
-    .filter((l) => l.includes("=") && !l.trim().startsWith("#"))
-    .map((l) => {
-      const i = l.indexOf("=");
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    }),
-);
-
-const SB = `${env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1`;
-const KEY = env.SUPABASE_SERVICE_ROLE_KEY;
-const H = {
-  apikey: KEY,
-  Authorization: `Bearer ${KEY}`,
-  "Content-Type": "application/json",
-  Prefer: "return=minimal",
-};
-
-const ALL = "id=neq.00000000-0000-0000-0000-000000000000";
-const NUM = "id=gt.0";
-
-// ---------------------------------------------------------------- wipe
-console.log("Clearing every table…");
-for (const [table, filter] of [
-  ["pageviews", NUM],
-  ["clicks", NUM],
-  ["citations", ALL],
-  ["backlinks", ALL],
-  ["social_posts", ALL],
-  ["subscribers", ALL],
-  ["posts", ALL],
-]) {
-  const r = await fetch(`${SB}/${table}?${filter}`, { method: "DELETE", headers: H });
-  console.log(`  ${r.ok ? "cleared" : "skipped"}  ${table}${r.ok ? "" : ` (${r.status})`}`);
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error("DATABASE_URL is not set. Run with it in the environment, e.g.\n" +
+                "  DATABASE_URL=postgresql://... node scripts/seed-starter.mjs");
+  exit(1);
 }
 
-// ------------------------------------------------------------- import
-const DIR = new URL("../../pv-blog/src/content/posts/", import.meta.url).pathname.replace(/^\//, "");
-const files = readdirSync(DIR).filter((f) => f.endsWith(".md"));
-console.log(`\nImporting ${files.length} starter articles…`);
+// This deletes live content, so make the target explicit before doing it.
+const target = DATABASE_URL.replace(/:\/\/[^@]*@/, "://***@");
+const rl = createInterface({ input: stdin, output: stdout });
+const answer = await rl.question(`This WIPES every table in:\n  ${target}\nType "wipe" to continue: `);
+rl.close();
+if (answer.trim() !== "wipe") {
+  console.log("Cancelled.");
+  exit(0);
+}
+
+const SEED_DIR = fileURLToPath(new URL("../db/seed/", import.meta.url));
+const files = readdirSync(SEED_DIR).filter((f) => f.endsWith(".md")).sort();
+if (!files.length) {
+  console.error(`No markdown found in ${SEED_DIR}`);
+  exit(1);
+}
 
 const WORDS_PER_MIN = 220;
+
 const rows = files.map((file) => {
-  const { data, content } = matter(readFileSync(join(DIR, file), "utf8"));
+  const { data, content } = matter(readFileSync(join(SEED_DIR, file), "utf8"));
   const words = content.trim().split(/\s+/).length;
   return {
     slug: file.replace(/\.md$/, ""),
@@ -78,12 +58,12 @@ const rows = files.map((file) => {
     read_mins: data.readMins ?? Math.max(1, Math.round(words / WORDS_PER_MIN)),
     keywords: data.keywords ?? [],
     tags: data.tags ?? [],
-    faq: data.faq ?? [],
+    faq: JSON.stringify(data.faq ?? []),
   };
 });
 
-// Exactly ONE post is the homepage hero. The markdown can flag several (or
-// none); the homepage only ever renders the first, so make the data honest.
+// Exactly ONE post is the homepage hero. The markdown can flag several (or none);
+// the homepage only renders the first, so make the data honest.
 let heroTaken = false;
 for (const r of rows) {
   if (r.featured && !heroTaken) {
@@ -99,12 +79,43 @@ if (!heroTaken) {
   rows[0].card_style = "hero";
 }
 
-const res = await fetch(`${SB}/posts`, { method: "POST", headers: H, body: JSON.stringify(rows) });
-if (!res.ok) {
-  console.error("Insert failed:", res.status, (await res.text()).slice(0, 300));
-  process.exit(1);
-}
+const COLS = Object.keys(rows[0]);
 
-for (const r of rows) console.log(`  ${r.featured ? "★" : " "} ${r.slug}`);
-console.log(`\nDone. ${rows.length} published posts, zero traffic, zero subscribers.`);
-console.log("Next: node scripts/backfill-embeddings.mjs   (enables related reading)");
+const db = new pg.Client({ connectionString: DATABASE_URL });
+await db.connect();
+
+try {
+  // One transaction: a failure mid-import leaves the database as it was,
+  // rather than wiped-and-empty.
+  await db.query("BEGIN");
+
+  console.log("Clearing every table...");
+  for (const table of ["pageviews", "clicks", "citations", "backlinks", "social_posts", "subscribers", "posts"]) {
+    const { rowCount } = await db.query(`DELETE FROM ${table}`);
+    console.log(`  cleared  ${table} (${rowCount})`);
+  }
+
+  console.log(`\nImporting ${rows.length} starter articles...`);
+  for (const r of rows) {
+    await db.query(
+      `INSERT INTO posts (${COLS.join(", ")})
+       VALUES (${COLS.map((_, i) => `$${i + 1}`).join(", ")})`,
+      COLS.map((c) => r[c]),
+    );
+    console.log(`  ${r.featured ? "*" : " "} ${r.slug}`);
+  }
+
+  await db.query("COMMIT");
+  console.log(`\nDone. ${rows.length} published posts, zero traffic, zero subscribers.`);
+  console.log("Next: node scripts/backfill-embeddings.mjs   (enables related reading)");
+} catch (err) {
+  await db.query("ROLLBACK").catch(() => {});
+  if (err.code === "42P01") {
+    console.error("A table is missing — run the migrations in db/ first.");
+  } else {
+    console.error(err.message);
+  }
+  exit(1);
+} finally {
+  await db.end();
+}

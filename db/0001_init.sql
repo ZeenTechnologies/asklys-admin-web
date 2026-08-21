@@ -1,6 +1,6 @@
 -- ============================================================================
 --  Ask Parent — admin schema
---  Paste this whole file into Supabase → SQL Editor → Run.
+--  Run against the asklys database. Safe to re-run.
 --  Safe to re-run: everything is IF NOT EXISTS / CREATE OR REPLACE.
 -- ============================================================================
 
@@ -63,7 +63,7 @@ create trigger posts_touch before update on posts
 for each row execute function touch_updated_at();
 
 -- ---------------------------------------------------------------------------
--- MEDIA  (images uploaded in the composer; files live in Supabase Storage)
+-- MEDIA  (images uploaded in the composer; files live in object storage)
 -- ---------------------------------------------------------------------------
 create table if not exists media (
   id          uuid primary key default gen_random_uuid(),

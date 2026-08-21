@@ -5,11 +5,11 @@ Private tool, not public-facing.
 
 ## How it connects to the website
 
-They never talk to each other directly. **Both read and write the same Supabase
+They never talk to each other directly. **Both read and write the same Postgres
 database** — that shared database is the entire link.
 
 ```
-  ADMIN  ──writes──▶  SUPABASE  ──reads──▶  WEBSITE  ──▶  visitors
+  ADMIN  ──writes──▶  POSTGRES  ──reads──▶  WEBSITE  ──▶  visitors
     │                                          ▲
     └────── "refresh now" webhook ─────────────┘
 ```
@@ -27,10 +27,13 @@ cp .env.example .env.local     # then fill it in
 npm run dev                    # http://localhost:3001
 ```
 
-**Database:** run both migrations in Supabase → SQL Editor, in order:
+**Database:** run the migrations against Postgres, in order:
 
-1. `supabase/0001_init.sql` — posts, media, analytics, subscribers
-2. `supabase/0002_social_and_backlinks.sql` — social feed, backlinks, citations
+1. `db/0001_init.sql` — posts, media, analytics, subscribers
+2. `db/0002_social_and_backlinks.sql` — social feed, backlinks, citations
+3. `db/0003_auth.sql` — accounts and sessions
+
+Then create your login: `node scripts/create-admin.mjs`
 
 ## What's in it
 

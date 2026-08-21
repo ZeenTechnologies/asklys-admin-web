@@ -1,7 +1,7 @@
 -- ============================================================================
 --  Ask Parent — migration 0002
 --  Adds: Instagram/social feed, backlink tracking, external-citation storage.
---  Paste into Supabase → SQL Editor → Run. Safe to re-run.
+--  Run against the asklys database. Safe to re-run.
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------

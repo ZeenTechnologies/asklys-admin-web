@@ -6,42 +6,49 @@
  *
  * This is fake data for demonstration only. Run --clear before going live.
  */
-import { readFileSync } from "node:fs";
+import pg from "pg";
 
 
-const env = Object.fromEntries(
-  readFileSync(new URL("../.env.local", import.meta.url), "utf8")
-    .split("\n")
-    .filter((l) => l.includes("=") && !l.trim().startsWith("#"))
-    .map((l) => {
-      const i = l.indexOf("=");
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    }),
-);
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error("DATABASE_URL is not set.");
+  process.exit(1);
+}
 
-const SB = `${env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1`;
-const KEY = env.SUPABASE_SERVICE_ROLE_KEY;
-const H = {
-  apikey: KEY,
-  Authorization: `Bearer ${KEY}`,
-  "Content-Type": "application/json",
-  Prefer: "return=minimal",
+const db = new pg.Client({ connectionString: DATABASE_URL });
+await db.connect();
+
+// jsonb columns arrive as objects/arrays and must be sent as JSON text.
+const encode = (v) => (v !== null && typeof v === "object" && !(v instanceof Date) ? JSON.stringify(v) : v);
+
+// Multi-row INSERT built from the first row's keys; every row must share a shape.
+async function post(table, rows) {
+  if (!rows.length) return { ok: true };
+  const cols = Object.keys(rows[0]);
+  const values = [];
+  const tuples = rows.map((r, n) => {
+    const ph = cols.map((_, i) => `$${n * cols.length + i + 1}`);
+    values.push(...cols.map((c) => encode(r[c])));
+    return `(${ph.join(", ")})`;
+  });
+  try {
+    await db.query(`INSERT INTO ${table} (${cols.join(", ")}) VALUES ${tuples.join(", ")}`, values);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, status: e.code, text: async () => e.message };
+  }
+}
+
+const del = async (table) => {
+  try { await db.query(`DELETE FROM ${table}`); } catch { /* table may not exist yet */ }
 };
 
-const post = (table, rows) =>
-  fetch(`${SB}/${table}`, { method: "POST", headers: H, body: JSON.stringify(rows) });
-const del = (table, q) =>
-  fetch(`${SB}/${table}?${q}`, { method: "DELETE", headers: H });
-
 if (process.argv.includes("--clear")) {
-  await del("pageviews", "id=gt.0");
-  await del("clicks", "id=gt.0");
-  await del("posts", "id=neq.00000000-0000-0000-0000-000000000000");
-  // these two only exist after migration 0002 — ignore if they're not there yet
-  await del("social_posts", "id=neq.00000000-0000-0000-0000-000000000000");
-  await del("subscribers", "id=neq.00000000-0000-0000-0000-000000000000");
-  await del("backlinks", "id=neq.00000000-0000-0000-0000-000000000000");
+  for (const t of ["pageviews", "clicks", "citations", "backlinks", "social_posts", "subscribers", "posts"]) {
+    await del(t);
+  }
   console.log("Demo data cleared.");
+  await db.end();
   process.exit(0);
 }
 
@@ -77,15 +84,7 @@ const daysAgo = (d) => new Date(Date.now() - d * 864e5);
  * still works with no key. Pexels photos are free for commercial use; credit is
  * appreciated but not required.
  */
-const PEXELS_KEY = (() => {
-  if (env.PEXELS_API_KEY) return env.PEXELS_API_KEY;
-  try {
-    const pv = readFileSync(new URL("../../PV/.env", import.meta.url), "utf8");
-    return pv.match(/^PEXELS_API_KEY=(.+)$/m)?.[1].trim() ?? "";
-  } catch {
-    return "";
-  }
-})();
+const PEXELS_KEY = process.env.PEXELS_API_KEY ?? "";
 
 // what to search Pexels for, per post
 const PHOTO_QUERY = {
@@ -384,6 +383,8 @@ const socialRes = await post(
 if (socialRes.ok) {
   console.log(`Inserted ${SOCIAL.length} demo Instagram posts.`);
 } else {
-  console.log("Skipped social posts — run supabase/0002_social_and_backlinks.sql first.");
+  console.log("Skipped social posts — run db/0002_social_and_backlinks.sql first.");
 }
 console.log("\nNext: open the admin → Backlinks → “Sync from traffic” to discover the referring domains.");
+
+await db.end();

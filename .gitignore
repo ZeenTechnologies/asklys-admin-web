@@ -22,7 +22,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env — NEVER commit. Holds the Supabase service-role key (bypasses all row
+# env — NEVER commit. Holds the database password, S3 credentials and API
 # level security), the AI API keys, and the admin password.
 .env
 .env*.local
@@ -39,3 +39,6 @@ yarn-error.log*
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# one-off operational scripts — run locally against a tunnelled DATABASE_URL
+scripts/
