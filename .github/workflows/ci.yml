@@ -41,11 +41,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Coolify deployment
-        run: |
-          curl --fail-with-body --silent --show-error \
-            -H "Authorization: Bearer $COOLIFY_TOKEN" \
-            "$COOLIFY_URL/api/v1/deploy?uuid=$COOLIFY_APP_UUID&force=false"
         env:
-          COOLIFY_URL: ${{ secrets.COOLIFY_URL }}
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          COOLIFY_APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
+          DEPLOY_URL: ${{ secrets.COOLIFY_DEPLOY_URL }}
+          TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # An unset secret would otherwise reach curl as an empty string and
+          # fail with "URL rejected", which says nothing about the real cause.
+          if [ -z "${DEPLOY_URL}" ]; then
+            echo "::error::COOLIFY_DEPLOY_URL is not set. Copy it from Coolify -> your app -> Webhooks, then add it under Settings -> Secrets -> Actions."
+            exit 1
+          fi
+          if [ -z "${TOKEN}" ]; then
+            echo "::error::COOLIFY_TOKEN is not set. Create one in Coolify -> Keys & Tokens."
+            exit 1
+          fi
+
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer ${TOKEN}" \
+            "${DEPLOY_URL}"
