@@ -47,8 +47,6 @@ const config = {
   /** Postgres. Full read/write — the admin owns this database. */
   DATABASE_URL: req("DATABASE_URL"),
 
-  /** Single shared admin password. See lib/auth.ts. */
-  ADMIN_PASSWORD: prodReq("ADMIN_PASSWORD"),
   /** The public site: where to send the "refresh now" ping, and preview links. */
   SITE_URL: opt("SITE_URL").replace(/\/$/, ""),
   /** Must match the same value in the blog app. */

@@ -24,7 +24,7 @@ function Row({ label, ok, detail }: { label: string; ok: boolean; detail: string
 }
 
 export default async function SettingsPage() {
-  await requireAuth();
+  const user = await requireAuth();
 
   return (
     <Shell>
@@ -54,10 +54,14 @@ export default async function SettingsPage() {
         </section>
 
         <section className="rounded-xl border border-line bg-white p-5">
-          <h2 className="font-extrabold text-ink mb-2">Admin password</h2>
+          <h2 className="font-extrabold text-ink mb-2">Signed in as</h2>
           <p className="text-[14px] text-muted">
-            Set by <code className="font-mono">ADMIN_PASSWORD</code> in the environment. Change it there
-            and redeploy — it is never stored in the database.
+            {user.name ? `${user.name} — ` : ""}{user.email}
+          </p>
+          <p className="mt-2 text-[14px] text-muted">
+            Add an account, or reset a password, from the server:{" "}
+            <code className="font-mono">node scripts/create-admin.mjs</code>. Resetting a password
+            signs that account out everywhere.
           </p>
         </section>
       </div>

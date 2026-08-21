@@ -9,8 +9,11 @@ export default async function LoginPage({
 
   async function attempt(formData: FormData) {
     "use server";
-    const ok = await signIn(String(formData.get("password") ?? ""));
-    redirect(ok ? "/" : "/login?error=1");
+    const result = await signIn(
+      String(formData.get("email") ?? ""),
+      String(formData.get("password") ?? ""),
+    );
+    redirect(result.ok ? "/" : `/login?error=${result.reason}`);
   }
 
   return (
@@ -26,15 +29,34 @@ export default async function LoginPage({
           </div>
         </div>
 
-        <label className="mt-7 block text-[13px] font-bold text-ink">Password</label>
+        <label className="mt-7 block text-[13px] font-bold text-ink">Email</label>
         <input
-          name="password"
-          type="password"
+          name="email"
+          type="email"
+          autoComplete="username"
           autoFocus
           required
           className="mt-2 w-full rounded-lg border border-line px-4 py-2.5 outline-none focus:border-brand"
         />
-        {error && <p className="mt-2 text-[13px] font-semibold text-red-600">Incorrect password.</p>}
+
+        <label className="mt-4 block text-[13px] font-bold text-ink">Password</label>
+        <input
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+          className="mt-2 w-full rounded-lg border border-line px-4 py-2.5 outline-none focus:border-brand"
+        />
+        {error === "throttled" ? (
+          <p className="mt-2 text-[13px] font-semibold text-red-600">
+            Too many attempts. Try again in 15 minutes.
+          </p>
+        ) : error ? (
+          // Deliberately doesn't say which of the two was wrong.
+          <p className="mt-2 text-[13px] font-semibold text-red-600">
+            Incorrect email or password.
+          </p>
+        ) : null}
 
         <button className="mt-5 w-full rounded-lg bg-brand py-2.5 font-extrabold text-white hover:bg-brand-mid transition-colors">
           Sign in
